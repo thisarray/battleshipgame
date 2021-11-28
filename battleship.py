@@ -143,11 +143,13 @@ def draw():
             screen.draw.rect(Rect((mouse_position[0]-2, mouse_position[1]-2),(preview_width,preview_height)), (128,128,128))
     else:
         screen.draw.text("Aim and fire", fontsize=40, center=(WIDTH/2,650), color=(255,255,255))
-    for ship_key_img in ship_list:
-        ship_key_img.draw()
-    screen.draw.text("Ships", topleft=key_position, fontsize=38)
-    for ship_text in ship_list_text:
-        screen.draw.text(ship_text[0], topleft=ship_text[1])
+    # Only show key if screen is wider than 1200
+    if (WIDTH >= 1200):
+        for ship_key_img in ship_list:
+            ship_key_img.draw()
+        screen.draw.text("Ships", topleft=key_position, fontsize=38)
+        for ship_text in ship_list_text:
+            screen.draw.text(ship_text[0], topleft=ship_text[1])
 
 def update():
     global player
