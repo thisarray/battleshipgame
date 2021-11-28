@@ -13,7 +13,7 @@ This has now been developed further. It supports two different screen sizes. To 
 
 For a large screen size update battleship.py with
 
-```SIZE_SML = True```
+```SIZE_SML = False```
 
 To run 
 
