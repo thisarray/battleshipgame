@@ -1,46 +1,87 @@
+import pygame
+import pgzrun
 from fleet import Fleet
 from grid import Grid
 from playerai import PlayerAi
 from playerhuman import PlayerHuman
 
-WIDTH = 1024
-HEIGHT  = 768
+# Default screen size - can be changed by config
+WIDTH = 1280
+HEIGHT  = 720
 TITLE = "Battleships"
 
-# Start of your grid (after labels)
-YOUR_GRID_START = (94,180)
-# Start of enemy grid
-ENEMY_GRID_START = (544,180)
+# Set SIZE_SML to True for small size (800 x 480)
+SIZE_SML = True
+
+# Set fullscreen
+FULLSCREEN = False
+
 GRID_SIZE = (38,38)
+
+# suffix for image
+img_txt = ""
+
+# Track if fullscreen
+fullscreen_status = False
 
 player = "player1setup"
 
 grid_img_1 = Actor ("grid", topleft=(50,150))
 grid_img_2 = Actor ("grid", topleft=(500,150))
 
-own_fleet = Fleet(YOUR_GRID_START, GRID_SIZE)
-enemy_fleet = Fleet(ENEMY_GRID_START, GRID_SIZE)
+# Uses start of grid (after grid labels)
+own_fleet = Fleet((94,179), GRID_SIZE)
+enemy_fleet = Fleet((544,179), GRID_SIZE)
 
 player1=PlayerHuman()
 # Player 2 represents the AI player
 player2=PlayerAi()
 
-mouse_position = (0,0)
+mouse_position = (0,0)         
+
+key_position = (1000, 150)
+
+your_fleet_txt_pos = (100,100)
+enemy_fleet_txt_pos = (550,100)
+
+# list of different ship types
+ship_list = [
+    Actor("carrier", topleft=(key_position[0], key_position[1]+70)),
+    Actor("battleship", topleft=(key_position[0], key_position[1]+150)),
+    Actor("submarine", topleft=(key_position[0], key_position[1]+230)),
+    Actor("cruiser", topleft=(key_position[0], key_position[1]+310)),
+    Actor("destroyer", topleft=(key_position[0], key_position[1]+390))
+    ]
+
+ship_list_text = [
+    ("Carrier (5)", (key_position[0], key_position[1]+40)),
+    ("Battleship (4)", (key_position[0], key_position[1]+120)),
+    ("Submarine (3)", (key_position[0], key_position[1]+200)),
+    ("Cruiser (3)", (key_position[0], key_position[1]+280)),
+    ("Destroyer (2)", (key_position[0], key_position[1]+360))
+     ]
+
+
 
 def setup ():
     global player_ships, placing_ship, placing_ship_direction
+    # configure is used to read config 
+    # after this will know screen size 
+    configure()
+    
     # Add Ai ships - start with largest
     # position ship takes ship size and returns direction, position
+    hide_ship = True
     this_ship = player2.position_ship(5)
-    enemy_fleet.add_ship("carrier",this_ship[1],this_ship[0],True)
+    enemy_fleet.add_ship("carrier",this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
     this_ship = player2.position_ship(4)
-    enemy_fleet.add_ship("battleship",this_ship[1],this_ship[0],True)
+    enemy_fleet.add_ship("battleship",this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
     this_ship = player2.position_ship(3)
-    enemy_fleet.add_ship("submarine",this_ship[1],this_ship[0],True)
+    enemy_fleet.add_ship("submarine",this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
     this_ship = player2.position_ship(3)
-    enemy_fleet.add_ship("cruiser",this_ship[1],this_ship[0],True)
+    enemy_fleet.add_ship("cruiser",this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
     this_ship = player2.position_ship(2)
-    enemy_fleet.add_ship("destroyer",this_ship[1],this_ship[0],True)
+    enemy_fleet.add_ship("destroyer",this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
 
     player_ships = {
         "carrier" : 5,
@@ -51,16 +92,38 @@ def setup ():
     placing_ship = "carrier"
     placing_ship_direction = "horizontal"
 
-setup()
 
+def configure():
+    global WIDTH, HEIGHT, GRID_SIZE, img_txt, grid_img_1, grid_img_2, your_fleet_txt_pos, enemy_fleet_txt_pos
+    if (SIZE_SML == False):
+        return
+    WIDTH=800
+    HEIGHT=480
+    GRID_SIZE=(25,25)
+    img_txt = "_sml"
+    
+    grid_img_1.image = "grid"+img_txt
+    grid_img_2.image = "grid"+img_txt
+    grid_img_1.topleft = (60, 140)
+    grid_img_2.topleft = (420, 140)
+    
+    your_fleet_txt_pos = (80, 90)
+    enemy_fleet_txt_pos = (440, 90)
+    
+    own_fleet.change_grid((91, 163), GRID_SIZE, img_txt)
+    enemy_fleet.change_grid((451, 163), GRID_SIZE, img_txt)
 
 def draw():
+    global fullscreen_status
+    if (FULLSCREEN == True and fullscreen_status == False):
+        screen.surface = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
+        fullscreen_status = True
     screen.fill((192,192,192))
     grid_img_1.draw()
     grid_img_2.draw()
     screen.draw.text("Battleships", fontsize=60, center=(WIDTH/2,50), shadow=(1,1), color=(255,255,255), scolor=(32,32,32))
-    screen.draw.text("Your fleet", fontsize=40, topleft=(100,100), color=(255,255,255))
-    screen.draw.text("The enemy fleet", fontsize=40, topleft=(550,100), color=(255,255,255))
+    screen.draw.text("Your fleet", fontsize=40, topleft=your_fleet_txt_pos, color=(255,255,255))
+    screen.draw.text("The enemy fleet", fontsize=40, topleft=enemy_fleet_txt_pos, color=(255,255,255))
     own_fleet.draw()
     enemy_fleet.draw()
     if (player == "gameover1"):
@@ -76,21 +139,20 @@ def draw():
             else:
                 preview_width = GRID_SIZE[0] - 4
                 preview_height = (GRID_SIZE[1] * player_ships[placing_ship]) - 4
-            screen.draw.rect(Rect(mouse_position,(preview_width,preview_height)), (128,128,128))
+            # Show approx position of ship (slightly offset to top left)
+            screen.draw.rect(Rect((mouse_position[0]-2, mouse_position[1]-2),(preview_width,preview_height)), (128,128,128))
     else:
         screen.draw.text("Aim and fire", fontsize=40, center=(WIDTH/2,650), color=(255,255,255))
+    for ship_key_img in ship_list:
+        ship_key_img.draw()
+    screen.draw.text("Ships", topleft=key_position, fontsize=38)
+    for ship_text in ship_list_text:
+        screen.draw.text(ship_text[0], topleft=ship_text[1])
 
 def update():
     global player
-    if (player == "player1setup"):
-        pass
-
-    if (player == "player2"):
-        grid_pos = player2.fire_shot()
-        # Ai uses list position - but grid uses grid_height)), (128,128,128))
-
-def update():
-    global player
+    if keyboard.q:
+        exit()
     if (player == "player1setup"):
         pass
 
@@ -134,7 +196,7 @@ def on_mouse_down(pos, button):
                 if (player1.check_ship_fit(player_ships[placing_ship], placing_ship_direction, grid_pos)):
                     player1.place_ship(player_ships[placing_ship], placing_ship_direction, grid_pos)
                     # Create the ship object
-                    own_fleet.add_ship(placing_ship,grid_pos,placing_ship_direction)
+                    own_fleet.add_ship(placing_ship,grid_pos,placing_ship_direction, img_txt, GRID_SIZE)
                     # Remove from list of ships to add_ship
                     player_ships.pop(placing_ship)
                     # If more ships to place_ship
@@ -164,3 +226,6 @@ def on_mouse_down(pos, button):
         player2.reset()
         setup()
         player = "player1setup"
+   
+setup()
+pgzrun.go()

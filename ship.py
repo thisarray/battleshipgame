@@ -5,15 +5,16 @@ from grid import Grid
 
 class Ship (Actor):
 
-    def __init__ (self, ship_type, grid, grid_pos, direction, hidden=False):
+    def __init__ (self, ship_type, grid, grid_pos, direction, img_txt="", grid_size=(38,28), hidden=False):
         Actor.__init__(self, ship_type, (10,10))
+        self.grid_size = grid_size
         self.ship_type = ship_type
         self.grid = grid
-        self.image = ship_type
+        self.image = ship_type+img_txt
         self.grid_pos = grid_pos
         self.topleft = self.grid.grid_pos_to_screen_pos((grid_pos))
         # Set the actor anchor position to centre of the first square
-        self.anchor = (38/2, 38/2)
+        self.anchor = (grid_size[0]/2, grid_size[1]/2)
         self.direction = direction
         if (direction == 'vertical'):
             self.angle = -90
