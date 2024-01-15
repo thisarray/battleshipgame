@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Battleships</title>
+  <script src="../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+<section id="imageLoader" class="hidden">
+  <img class="hidden" src="images/battleship.png" alt="battleship" data-name="battleship">
+  <img class="hidden" src="images/battleship_sml.png" alt="battleship_sml" data-name="battleship_sml">
+  <img class="hidden" src="images/carrier.png" alt="carrier" data-name="carrier">
+  <img class="hidden" src="images/carrier_sml.png" alt="carrier_sml" data-name="carrier_sml">
+  <img class="hidden" src="images/cruiser.png" alt="cruiser" data-name="cruiser">
+  <img class="hidden" src="images/cruiser_sml.png" alt="cruiser_sml" data-name="cruiser_sml">
+  <img class="hidden" src="images/destroyer.png" alt="destroyer" data-name="destroyer">
+  <img class="hidden" src="images/destroyer_sml.png" alt="destroyer_sml" data-name="destroyer_sml">
+  <img class="hidden" src="images/grid.png" alt="grid" data-name="grid">
+  <img class="hidden" src="images/grid_sml.png" alt="grid_sml" data-name="grid_sml">
+  <img class="hidden" src="images/hit.png" alt="hit" data-name="hit">
+  <img class="hidden" src="images/hit_sml.png" alt="hit_sml" data-name="hit_sml">
+  <img class="hidden" src="images/miss.png" alt="miss" data-name="miss">
+  <img class="hidden" src="images/miss_sml.png" alt="miss_sml" data-name="miss_sml">
+  <img class="hidden" src="images/submarine.png" alt="submarine" data-name="submarine">
+  <img class="hidden" src="images/submarine_sml.png" alt="submarine_sml" data-name="submarine_sml">
+</section>
+
+<main>
+<h1>Battleships</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p>Licensed under <a href="https://www.gnu.org/licenses/">GNU GENERAL PUBLIC LICENSE Version 3</a>.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+import math
+import random
+
+import pygame
+import pgzrun
+
+from pgzero.actor import Actor
+
+class Grid:
+
+    # Grid dimensions are in terms of screen pixels
+    # Tools to convert between different values are
+    # included as static methods
+    def __init__ (self, start_grid, grid_size):
+        self.start_grid = start_grid
+        self.grid_size = grid_size
+
+    # Does co-ordinates match this grid
+    def check_in_grid (self, screen_pos):
+        if (screen_pos[0] &lt; self.start_grid[0] or
+            screen_pos[1] &lt; self.start_grid[1] or
+            screen_pos[0] &gt; self.start_grid[0] + (self.grid_size[0] * 10) or
+            screen_pos[1] &gt; self.start_grid[1] + (self.grid_size[1] * 10)):
+                return False
+        else:
+            return True
+
+    def get_grid_pos (self, screen_pos):
+        x_offset = screen_pos[0] - self.start_grid[0]
+        x = math.floor(x_offset / self.grid_size[0])
+        y_offset = screen_pos[1] - self.start_grid[1]
+        y = math.floor(y_offset / self.grid_size[1])
+        if (x &lt; 0 or y &lt; 0 or x &gt; 9 or y &gt; 9):
+            return None
+        return (x,y)
+
+    # Gets top left of a grid position - returns as screen position
+    def grid_pos_to_screen_pos (self, grid_pos):
+        x = self.start_grid[0] + (grid_pos[0] * self.grid_size[0])
+        y = self.start_grid[1] + (grid_pos[1] * self.grid_size[1])
+        return (x,y)
+
+# Ship is referred to using an x,y position
+
+class Ship (Actor):
+
+    def __init__ (self, ship_type, grid, grid_pos, direction, img_txt=&quot;&quot;, grid_size=(38,28), hidden=False):
+        Actor.__init__(self, ship_type, (10,10))
+        self.grid_size = grid_size
+        self.ship_type = ship_type
+        self.grid = grid
+        self.image = ship_type+img_txt
+        self.grid_pos = grid_pos
+        self.topleft = self.grid.grid_pos_to_screen_pos((grid_pos))
+        # Set the actor anchor position to centre of the first square
+        self.anchor = (grid_size[0]/2, grid_size[1]/2)
+        self.direction = direction
+        if (direction == &#x27;vertical&#x27;):
+            self.angle = -90
+        self.hidden = hidden
+        if (ship_type == &quot;destroyer&quot;):
+            self.ship_size = 2
+            self.hits = [False, False]
+        elif (ship_type == &quot;cruiser&quot;):
+            self.ship_size = 3
+            self.hits = [False, False, False]
+        elif (ship_type == &quot;submarine&quot;):
+            self.ship_size = 3
+            self.hits = [False, False, False]
+        elif (ship_type == &quot;battleship&quot;):
+            self.ship_size = 4
+            self.hits = [False, False, False, False]
+        elif (ship_type == &quot;carrier&quot;):
+            self.ship_size = 5
+            self.hits = [False, False, False, False, False]
+
+    def draw(self):
+        if (self.hidden):
+            return
+        Actor.draw(self)
+
+    def is_sunk (self):
+        if (False in self.hits):
+            return False
+        return True
+
+    def fire (self, fire_grid_pos):
+        if self.direction == &#x27;horizontal&#x27;:
+            if (fire_grid_pos[0] &gt;= self.grid_pos[0] and
+                fire_grid_pos[0] &lt; self.grid_pos[0]+self.ship_size and
+                fire_grid_pos[1] == self.grid_pos[1]):
+                self.hits[fire_grid_pos[0]-self.grid_pos[0]] = True
+                return True
+        else:
+            if (fire_grid_pos[0] == self.grid_pos[0] and
+                fire_grid_pos[1] &gt;= self.grid_pos[1] and
+                fire_grid_pos[1] &lt; self.grid_pos[1]+self.ship_size):
+                self.hits[fire_grid_pos[1]-self.grid_pos[1]] = True
+                return True
+        return False
+
+    # Does this ship cover this grid_position
+    def includes_grid_pos (self, check_grid_pos):
+        # If first pos then return True
+        if (self.grid_pos == check_grid_pos):
+            return True
+        # check x axis
+        elif (self.direction == &#x27;horizontal&#x27; and
+            self.grid_pos[1] == check_grid_pos[1] and
+            check_grid_pos[0] &gt;= self.grid_pos[0] and
+            check_grid_pos[0] &lt; self.grid_pos[0] + self.ship_size):
+            return True
+        elif (self.direction == &#x27;vertical&#x27; and
+            self.grid_pos[0] == check_grid_pos[0] and
+            check_grid_pos[1] &gt;= self.grid_pos[1] and
+            check_grid_pos[1] &lt; self.grid_pos[1] + self.ship_size):
+            return True
+        else :
+            return False
+
+class Shot(Actor):
+
+    def __init__ (self, hit, pos):
+        Actor.__init__(self,hit)
+        self.topleft=pos
+
+class Fleet:
+
+    def __init__ (self, start_grid, grid_size, img_txt=&quot;&quot;):
+        self.start_grid = start_grid
+        self.grid_size = grid_size
+        self.ships = []
+        self.grid = Grid(start_grid, grid_size)
+        self.shots = []
+        self.img_txt = img_txt
+
+    def change_grid (self, start_grid, grid_size, img_txt=&quot;&quot;):
+        self.start_grid = start_grid
+        self.grid_size = grid_size
+        self.grid.start_grid = self.start_grid
+        self.grid.grid_size = self.grid_size
+        self.img_txt = img_txt
+
+    # Is there a ship at this position that has sunk
+    def is_ship_sunk_grid_pos (self, check_grid_pos):
+        # find ship at that position
+        for this_ship in self.ships:
+            if (this_ship.includes_grid_pos(check_grid_pos)):
+                return this_ship.is_sunk()
+        # If there is no ship at this position then return False
+        return False
+
+    def add_ship (self, type, position, direction, img_txt=&quot;&quot;, grid_size=(38,38), hidden=False):
+        self.ships.append(Ship(type, self.grid, position, direction, img_txt, grid_size, hidden))
+
+    # check through ships to see if any still floating
+    def all_sunk (self):
+        for this_ship in self.ships:
+            if not this_ship.is_sunk():
+                return False
+        return True
+
+    # Draws entire fleet (each of the ships)
+    def draw(self):
+        for this_ship in self.ships:
+            this_ship.draw()
+        for this_shot in self.shots:
+            this_shot.draw()
+
+    def fire (self, pos):
+        # Is this a hit
+        for this_ship in self.ships:
+            if (this_ship.fire(pos)):
+                # Hit
+                self.shots.append(Shot(&quot;hit&quot;+self.img_txt,self.grid.grid_pos_to_screen_pos(pos)))
+                #check if this ship sunk
+                if this_ship.is_sunk():
+                    # Ship sunk so make it visible
+                    this_ship.hidden = False
+                return True
+        self.shots.append(Shot(&quot;miss&quot;+self.img_txt,self.grid.grid_pos_to_screen_pos(pos)))
+        return False
+
+    def reset(self):
+        self.ships = []
+        self.shots = []
+
+# Provides Ai Player
+class Player:
+
+    NA = 0
+    MISS = 1
+    HIT = 2
+
+    def __init__ (self):
+        # Own grid for positioning own ships
+        # Set to hit where a ship is positioned
+        self.owngrid = [ [Player.NA for y in range(10)] for x in range(10) ]
+
+    def check_ship_fit (self, ship_size, direction, start_pos):
+        #print (&quot;Checking {} {} {}&quot;.format(ship_size, direction, start_pos))
+        if (direction == &quot;horizontal&quot;):
+            # Check if it won&#x27;t fit on the grid
+            # -1 as start_pos is included in the size
+            if ((start_pos[0] + ship_size -1) &gt; 9):
+                return False
+            # check that there are no ships in the way
+            # range goes to one less than max size - so no need for the -1
+            for x_pos in range(start_pos[0],start_pos[0]+ship_size):
+                if (self.owngrid[x_pos][start_pos[1]] == Player.HIT):
+                    return False
+            return True
+        # Otherwise vertical
+        else:
+            # Check if it won&#x27;t fit on the grid
+            # -1 as start_pos is included in the size
+            if ((start_pos[1] + ship_size -1) &gt; 9):
+                return False
+            # check that there are no ships in the way
+            # range goes to one less than max size - so no need for the -1
+            for y_pos in range (start_pos[1],start_pos[1]+ship_size):
+                if (self.owngrid[start_pos[0]][y_pos] == Player.HIT):
+                    return False
+            return True
+
+    # Place ship is used during ship placement
+    # Updates grid with location of ship
+    def place_ship (self, ship_size, direction, start_pos):
+        if (direction == &quot;horizontal&quot;):
+            for x_pos in range (start_pos[0],start_pos[0]+ship_size):
+                self.owngrid[x_pos][start_pos[1]] = Player.HIT
+        # otherwise vertical
+        else:
+            for y_pos in range (start_pos[1],start_pos[1]+ship_size):
+                self.owngrid[start_pos[0]][y_pos] = Player.HIT
+
+    def reset(self):
+        self.owngrid = [ [Player.NA for y in range(10)] for x in range(10) ]
+
+# Provides Ai Player
+class PlayerAi(Player):
+
+    def __init__ (self):
+        # Create 2 dimension list with no shots fired
+        # access using [x value][y value]
+        # Pre-populate with not checked
+        self.shots = [ [Player.NA for y in range(10)] for x in range(10) ]
+        # Hit ship is the position of the first successful hit on a ship
+        self.hit_ship = None
+        Player.__init__(self)
+
+
+    def fire_shot(self):
+        # If not targetting hit ship
+        if (self.hit_ship == None):
+            return (self.get_random())
+        else:
+            # Have scored a hit - so find neighbouring positions
+            # copy hit_ship into separate values to make easier to follow
+            hit_x = self.hit_ship[0]
+            hit_y = self.hit_ship[1]
+            # Try horizontal if not at edge
+            if (hit_x &lt; 9):
+                for x in range (hit_x+1,10):
+                    if (self.shots[x][hit_y] == Player.NA):
+                        return (x,hit_y)
+                    if (self.shots[x][hit_y] == Player.MISS):
+                        break
+            if (hit_x &gt; 0):
+                for x in range (hit_x-1,-1, -1):
+                    if (self.shots[x][hit_y] == Player.NA):
+                        return (x,hit_y)
+                    if (self.shots[x][hit_y] == Player.MISS):
+                        break
+            if (hit_y &lt; 9):
+                for y in range (hit_y+1,10):
+                    if (self.shots[hit_x][y] == Player.NA):
+                        return (hit_x,y)
+                    if (self.shots[hit_x][y] == Player.MISS):
+                        break
+            if (hit_y &gt; 0):
+                for y in range (hit_y-1,-1, -1):
+                    if (self.shots[hit_x][y] == Player.NA):
+                        return (hit_x,y)
+                    if (self.shots[hit_x][y] == Player.MISS):
+                        break
+            # Catch all - shouldn&#x27;t get this, but just in case guess random
+            return (self.get_random())
+
+    def fire_result(self, grid_pos, result):
+        x_pos = grid_pos[0]
+        y_pos = grid_pos[1]
+        if (result == True):
+            result_value = Player.HIT
+            if (self.hit_ship == None):
+                self.hit_ship = grid_pos
+        else:
+            result_value = Player.MISS
+        self.shots[x_pos][y_pos] = result_value
+
+    def get_random(self):
+        # Copy only non used positions into a temporary list
+        non_shots = []
+        for x_pos in range (0,10):
+            for y_pos in range (0,10):
+                if self.shots[x_pos][y_pos] == Player.NA:
+                    non_shots.append((x_pos,y_pos))
+        return random.choice(non_shots)
+
+    # Let Ai know that the last shot sunk a ship
+    # list_pos is provided, but not currently used
+    def ship_sunk(self, grid_pos):
+        # reset hit ship
+        self.hit_ship = None
+
+    # Find a position for the ship -
+    def position_ship (self, ship_size):
+        # determine if horizontal or vertical
+        direction = random.choice([&quot;horizontal&quot;,&quot;vertical&quot;])
+        # Position where the ship starts
+        grid_pos = [None, None]
+        # Keep trying to find a place until successful
+        while (grid_pos[0] == None):
+            possible_positions = []
+            # if horizontal first choose y axis
+            if (direction == &quot;horizontal&quot;):
+                y_pos = random.randint (0,9)
+                # Find positions that the ship will fit
+                for x_pos in range (0, 9-ship_size):
+                    if (self.check_ship_fit(ship_size, direction, (x_pos, y_pos))):
+                       possible_positions.append((x_pos,y_pos))
+            else:
+                x_pos = random.randint (0,9)
+                # Find positions that the ship will fit
+                for y_pos in range (0, 9-ship_size):
+                    if (self.check_ship_fit(ship_size, direction, (x_pos, y_pos))):
+                       possible_positions.append((x_pos,y_pos))
+            # Did we find any possible positions?
+            if (len(possible_positions)&gt;0):
+                position = random.choice(possible_positions)
+                self.place_ship (ship_size, direction, position)
+                return (direction, position)
+            # if didn&#x27;t get a match then try again
+            else:
+                continue
+
+    def reset(self):
+        self.shots = [ [Player.NA for y in range(10)] for x in range(10) ]
+        Player.reset(self)
+
+# Provides Ai Player
+class PlayerHuman(Player):
+
+    def __init__ (self):
+        Player.__init__(self)
+
+# Default screen size - can be changed by config
+WIDTH = 1280
+HEIGHT  = 720
+TITLE = &quot;Battleships&quot;
+
+# Set SIZE_SML to True for small size (800 x 480)
+SIZE_SML = True
+
+# Set fullscreen
+FULLSCREEN = False
+
+GRID_SIZE = (38,38)
+
+# suffix for image
+img_txt = &quot;&quot;
+
+# Track if fullscreen
+fullscreen_status = False
+
+player = &quot;player1setup&quot;
+
+grid_img_1 = Actor (&quot;grid&quot;, topleft=(50,150))
+grid_img_2 = Actor (&quot;grid&quot;, topleft=(500,150))
+
+# Uses start of grid (after grid labels)
+own_fleet = Fleet((94,179), GRID_SIZE)
+enemy_fleet = Fleet((544,179), GRID_SIZE)
+
+player1=PlayerHuman()
+# Player 2 represents the AI player
+player2=PlayerAi()
+
+mouse_position = (0,0)
+
+key_position = (1000, 150)
+
+your_fleet_txt_pos = (100,100)
+enemy_fleet_txt_pos = (550,100)
+
+# list of different ship types
+ship_list = [
+    Actor(&quot;carrier&quot;, topleft=(key_position[0], key_position[1]+70)),
+    Actor(&quot;battleship&quot;, topleft=(key_position[0], key_position[1]+150)),
+    Actor(&quot;submarine&quot;, topleft=(key_position[0], key_position[1]+230)),
+    Actor(&quot;cruiser&quot;, topleft=(key_position[0], key_position[1]+310)),
+    Actor(&quot;destroyer&quot;, topleft=(key_position[0], key_position[1]+390))
+    ]
+
+ship_list_text = [
+    (&quot;Carrier (5)&quot;, (key_position[0], key_position[1]+40)),
+    (&quot;Battleship (4)&quot;, (key_position[0], key_position[1]+120)),
+    (&quot;Submarine (3)&quot;, (key_position[0], key_position[1]+200)),
+    (&quot;Cruiser (3)&quot;, (key_position[0], key_position[1]+280)),
+    (&quot;Destroyer (2)&quot;, (key_position[0], key_position[1]+360))
+     ]
+
+
+
+def setup ():
+    global player_ships, placing_ship, placing_ship_direction
+    # configure is used to read config
+    # after this will know screen size
+    configure()
+
+    # Add Ai ships - start with largest
+    # position ship takes ship size and returns direction, position
+    hide_ship = True
+    this_ship = player2.position_ship(5)
+    enemy_fleet.add_ship(&quot;carrier&quot;,this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
+    this_ship = player2.position_ship(4)
+    enemy_fleet.add_ship(&quot;battleship&quot;,this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
+    this_ship = player2.position_ship(3)
+    enemy_fleet.add_ship(&quot;submarine&quot;,this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
+    this_ship = player2.position_ship(3)
+    enemy_fleet.add_ship(&quot;cruiser&quot;,this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
+    this_ship = player2.position_ship(2)
+    enemy_fleet.add_ship(&quot;destroyer&quot;,this_ship[1],this_ship[0], img_txt, GRID_SIZE, hide_ship)
+
+    player_ships = {
+        &quot;carrier&quot; : 5,
+        &quot;battleship&quot; : 4,
+        &quot;cruiser&quot; : 3,
+        &quot;submarine&quot; : 3,
+        &quot;destroyer&quot;: 2 }
+    placing_ship = &quot;carrier&quot;
+    placing_ship_direction = &quot;horizontal&quot;
+
+
+def configure():
+    global WIDTH, HEIGHT, GRID_SIZE, img_txt, grid_img_1, grid_img_2, your_fleet_txt_pos, enemy_fleet_txt_pos
+    if (SIZE_SML == False):
+        return
+    WIDTH=800
+    HEIGHT=480
+    GRID_SIZE=(25,25)
+    img_txt = &quot;_sml&quot;
+
+    grid_img_1.image = &quot;grid&quot;+img_txt
+    grid_img_2.image = &quot;grid&quot;+img_txt
+    grid_img_1.topleft = (60, 140)
+    grid_img_2.topleft = (420, 140)
+
+    your_fleet_txt_pos = (80, 90)
+    enemy_fleet_txt_pos = (440, 90)
+
+    own_fleet.change_grid((91, 163), GRID_SIZE, img_txt)
+    enemy_fleet.change_grid((451, 163), GRID_SIZE, img_txt)
+
+def draw():
+    global fullscreen_status
+    if (FULLSCREEN == True and fullscreen_status == False):
+        screen.surface = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
+        fullscreen_status = True
+    screen.fill((192,192,192))
+    grid_img_1.draw()
+    grid_img_2.draw()
+    screen.draw.text(&quot;Battleships&quot;, fontsize=60, center=(WIDTH/2,50), shadow=(1,1), color=(255,255,255), scolor=(32,32,32))
+    screen.draw.text(&quot;Your fleet&quot;, fontsize=40, topleft=your_fleet_txt_pos, color=(255,255,255))
+    screen.draw.text(&quot;The enemy fleet&quot;, fontsize=40, topleft=enemy_fleet_txt_pos, color=(255,255,255))
+    own_fleet.draw()
+    enemy_fleet.draw()
+    if (player == &quot;gameover1&quot;):
+        screen.draw.text(&quot;Game Over\nYou won&quot;, fontsize=60, center=(WIDTH/2,HEIGHT/2), shadow=(1,1), color=(255,255,255), scolor=(32,32,32))
+    elif (player == &quot;gameover2&quot;):
+        screen.draw.text(&quot;Game Over\nYou lost!&quot;, fontsize=60, center=(WIDTH/2,HEIGHT/2), shadow=(1,1), color=(255,255,255), scolor=(32,32,32))
+    elif (player == &quot;player1setup&quot;):
+        screen.draw.text(&quot;Place your ships&quot;, fontsize=40, center=(WIDTH/2,650), color=(255,255,255))
+        if (own_fleet.grid.check_in_grid(mouse_position)):
+            if (placing_ship_direction == &quot;horizontal&quot;):
+                preview_width = (GRID_SIZE[0] * player_ships[placing_ship]) - 4
+                preview_height = GRID_SIZE[1] - 4
+            else:
+                preview_width = GRID_SIZE[0] - 4
+                preview_height = (GRID_SIZE[1] * player_ships[placing_ship]) - 4
+            # Show approx position of ship (slightly offset to top left)
+            screen.draw.rect(Rect((mouse_position[0]-2, mouse_position[1]-2),(preview_width,preview_height)), (128,128,128))
+    else:
+        screen.draw.text(&quot;Aim and fire&quot;, fontsize=40, center=(WIDTH/2,650), color=(255,255,255))
+    # Only show key if screen is wider than 1200
+    if (WIDTH &gt;= 1200):
+        for ship_key_img in ship_list:
+            ship_key_img.draw()
+        screen.draw.text(&quot;Ships&quot;, topleft=key_position, fontsize=38)
+        for ship_text in ship_list_text:
+            screen.draw.text(ship_text[0], topleft=ship_text[1])
+
+def update():
+    global player
+    if keyboard.q:
+        exit()
+    if (player == &quot;player1setup&quot;):
+        pass
+
+    if (player == &quot;player2&quot;):
+        grid_pos = player2.fire_shot()
+        # Ai uses list position - but grid uses grid
+        result = own_fleet.fire(grid_pos)
+        player2.fire_result (grid_pos, result)
+        # If ship sunk then inform Ai player
+        if (result == True):
+            if (own_fleet.is_ship_sunk_grid_pos(grid_pos)):
+                player2.ship_sunk(grid_pos)
+                # As a ship is sunk - check to see if all ships are sunk
+                if own_fleet.all_sunk():
+                    player = &quot;gameover2&quot;
+                    return
+
+        # If reach here then not gameover, so switch back to main player
+        player = &quot;player1&quot;
+
+# Track position of mouse, needed during ship placement
+def on_mouse_move(pos):
+        global mouse_position
+        mouse_position = (pos)
+
+def on_mouse_down(pos, button):
+    global player, player_ships, placing_ship, placing_ship_direction
+    if (player == &quot;player1setup&quot;):
+        if (button == mouse.RIGHT):
+            if (placing_ship_direction == &quot;horizontal&quot;):
+                placing_ship_direction = &quot;vertical&quot;
+            else:
+                placing_ship_direction = &quot;horizontal&quot;
+        elif (button == mouse.LEFT):
+            # Click to place_ship
+            # Check if no grid
+            if (own_fleet.grid.check_in_grid(mouse_position)):
+                # convert to grid position
+                grid_pos = own_fleet.grid.get_grid_pos(mouse_position)
+                # check it fits and reserve space
+                if (player1.check_ship_fit(player_ships[placing_ship], placing_ship_direction, grid_pos)):
+                    player1.place_ship(player_ships[placing_ship], placing_ship_direction, grid_pos)
+                    # Create the ship object
+                    own_fleet.add_ship(placing_ship,grid_pos,placing_ship_direction, img_txt, GRID_SIZE)
+                    # Remove from list of ships to add_ship
+                    player_ships.pop(placing_ship)
+                    # If more ships to place_ship
+                    if (len (player_ships) &gt; 0):
+                        # Get next ship to add
+                        placing_ship = next(iter(player_ships))
+                        placing_ship_direction = &quot;horizontal&quot;
+                    else:
+                        # When completed adding ships switch to play
+                        player=&quot;player1&quot;
+
+    if (button != mouse.LEFT):
+        return
+    if (player == &quot;player1&quot;):
+        if (enemy_fleet.grid.check_in_grid(pos)):
+            grid_location = enemy_fleet.grid.get_grid_pos(pos)
+            enemy_fleet.fire(grid_location)
+            if enemy_fleet.all_sunk():
+                player = &quot;gameover1&quot;
+            else:
+                # switch to player 2
+                player = &quot;player2&quot;
+    elif (player == &quot;gameover1&quot; or player == &quot;gameover2&quot;):
+        own_fleet.reset()
+        enemy_fleet.reset()
+        player1.reset()
+        player2.reset()
+        setup()
+        player = &quot;player1setup&quot;
+
+setup()
+pgzrun.go()
+</code></pre>
+</main>
+
+<script>
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+class Grid {
+  /*
+   * Grid dimensions are in terms of screen pixels
+   * Tools to convert between different values are
+   * included as static methods
+   */
+  constructor(start_grid, grid_size) {
+    this.start_grid = start_grid.slice();
+    this.grid_size = grid_size.slice();
+  }
+
+  // Does co-ordinates match this grid
+  check_in_grid(screen_pos) {
+    if ((screen_pos[0] < this.start_grid[0]) ||
+        (screen_pos[1] < this.start_grid[1]) ||
+        (screen_pos[0] > (this.start_grid[0] + (this.grid_size[0] * 10))) ||
+        (screen_pos[1] > (this.start_grid[1] + (this.grid_size[1] * 10)))) {
+      return false;
+    }
+    else {
+      return true;
+    }
+  }
+
+  get_grid_pos(screen_pos) {
+    let x_offset = screen_pos[0] - this.start_grid[0],
+        x = Math.floor(x_offset / this.grid_size[0]),
+        y_offset = screen_pos[1] - this.start_grid[1],
+        y = Math.floor(y_offset / this.grid_size[1]);
+    if ((x < 0) || (y < 0) || (x > 9) || (y > 9)) {
+      return null;
+    }
+    return [x, y];
+  }
+
+  // Gets top left of a grid position - returns as screen position
+  grid_pos_to_screen_pos(grid_pos) {
+    let x = this.start_grid[0] + (grid_pos[0] * this.grid_size[0]),
+        y = this.start_grid[1] + (grid_pos[1] * this.grid_size[1]);
+    return [x, y];
+  }
+}
+
+// Ship is referred to using an x,y position
+class Ship extends Actor {
+  constructor(ship_type, grid, grid_pos, direction, img_txt = "", grid_size = null, hidden = false) {
+    super(ship_type);
+    this.pos = [10, 10];
+    if (!Array.isArray(grid_size)) {
+      grid_size = [38, 28];
+    }
+    this.grid_size = grid_size.slice();
+    this.ship_type = ship_type;
+    this.grid = grid;
+    this.name = ship_type + img_txt;
+    this.grid_pos = grid_pos.slice();
+    this.topleft = this.grid.grid_pos_to_screen_pos(grid_pos);
+    // Set the actor anchor position to centre of the first square
+    this.anchor = [grid_size[0] / 2, grid_size[1] / 2];
+    this.direction = direction;
+    if (direction === 'vertical') {
+      this.angle = -90;
+    }
+    this.hidden = hidden;
+    if (ship_type === "destroyer") {
+      this.ship_size = 2;
+      this.hits = [false, false];
+    }
+    else if (ship_type === "cruiser") {
+      this.ship_size = 3;
+      this.hits = [false, false, false];
+    }
+    else if (ship_type === "submarine") {
+      this.ship_size = 3;
+      this.hits = [false, false, false];
+    }
+    else if (ship_type === "battleship") {
+      this.ship_size = 4;
+      this.hits = [false, false, false, false];
+    }
+    else if (ship_type === "carrier") {
+      this.ship_size = 5;
+      this.hits = [false, false, false, false, false];
+    }
+  }
+
+  draw() {
+    if (this.hidden) {
+      return;
+    }
+    super.draw();
+  }
+
+  is_sunk() {
+    if (this.hits.some(v => !v)) {
+      return false;
+    }
+    return true;
+  }
+
+  fire(fire_grid_pos) {
+    if (this.direction === 'horizontal') {
+      if ((fire_grid_pos[0] >= this.grid_pos[0]) &&
+          (fire_grid_pos[0] < (this.grid_pos[0] + this.ship_size)) &&
+          (fire_grid_pos[1] === this.grid_pos[1])) {
+        this.hits[fire_grid_pos[0]-this.grid_pos[0]] = true;
+        return true;
+      }
+    }
+    else {
+      if ((fire_grid_pos[0] === this.grid_pos[0]) &&
+          (fire_grid_pos[1] >= this.grid_pos[1]) &&
+          (fire_grid_pos[1] < (this.grid_pos[1] + this.ship_size))) {
+        this.hits[fire_grid_pos[1]-this.grid_pos[1]] = true;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Does this ship cover this grid_position
+  includes_grid_pos(check_grid_pos) {
+    // If first pos then return True
+    if ((this.grid_pos[0] === check_grid_pos[0]) &&
+        (this.grid_pos[1] === check_grid_pos[1])) {
+      return true;
+    }
+    // check x axis
+    else if ((this.direction === 'horizontal') &&
+             (this.grid_pos[1] === check_grid_pos[1]) &&
+             (check_grid_pos[0] >= this.grid_pos[0]) &&
+             (check_grid_pos[0] < (this.grid_pos[0] + this.ship_size))) {
+      return true;
+    }
+    else if ((this.direction === 'vertical') &&
+             (this.grid_pos[0] === check_grid_pos[0]) &&
+             (check_grid_pos[1] >= this.grid_pos[1]) &&
+             (check_grid_pos[1] < (this.grid_pos[1] + this.ship_size))) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+}
+
+class Shot extends Actor {
+  constructor(hit, pos) {
+    super(hit);
+    this.topleft = pos;
+  }
+}
+
+class Fleet {
+  constructor(start_grid, grid_size, img_txt = "") {
+    this.start_grid = start_grid.slice();
+    this.grid_size = grid_size.slice();
+    this.ships = [];
+    this.grid = new Grid(start_grid, grid_size);
+    this.shots = [];
+    this.img_txt = img_txt;
+  }
+
+  change_grid(start_grid, grid_size, img_txt = "") {
+    this.start_grid = start_grid.slice();
+    this.grid_size = grid_size.slice();
+    this.grid.start_grid = this.start_grid.slice();
+    this.grid.grid_size = this.grid_size.slice();
+    this.img_txt = img_txt;
+  }
+
+  // Is there a ship at this position that has sunk
+  is_ship_sunk_grid_pos(check_grid_pos) {
+    // find ship at that position
+    for (let this_ship of this.ships) {
+      if (this_ship.includes_grid_pos(check_grid_pos)) {
+        return this_ship.is_sunk();
+      }
+    }
+    // If there is no ship at this position then return False
+    return false;
+  }
+
+  add_ship(type, position, direction, img_txt = "", grid_size = null, hidden = false) {
+    if (!Array.isArray(grid_size)) {
+      grid_size = [38, 38];
+    }
+    this.ships.push(new Ship(type, this.grid, position, direction, img_txt, grid_size, hidden));
+  }
+
+  // check through ships to see if any still floating
+  all_sunk() {
+    for (let this_ship of this.ships) {
+      if (!this_ship.is_sunk()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Draws entire fleet (each of the ships)
+  draw() {
+    for (let this_ship of this.ships) {
+      this_ship.draw();
+    }
+    for (let this_shot of this.shots) {
+      this_shot.draw();
+    }
+  }
+
+  fire(pos) {
+    // Is this a hit
+    for (let this_ship of this.ships) {
+      if (this_ship.fire(pos)) {
+        // Hit
+        this.shots.push(new Shot("hit" + this.img_txt, this.grid.grid_pos_to_screen_pos(pos)));
+        //check if this ship sunk
+        if (this_ship.is_sunk()) {
+          // Ship sunk so make it visible
+          this_ship.hidden = false;
+        }
+        return true;
+      }
+    }
+    this.shots.push(new Shot("miss" + this.img_txt, this.grid.grid_pos_to_screen_pos(pos)));
+    return false;
+  }
+
+  reset() {
+    this.ships = [];
+    this.shots = [];
+  }
+}
+
+// Provides Ai Player
+class Player {
+  static NA = 0;
+  static MISS = 1;
+  static HIT = 2;
+
+  constructor() {
+    // Own grid for positioning own ships
+    // Set to hit where a ship is positioned
+    this.reset();
+  }
+
+  check_ship_fit(ship_size, direction, start_pos) {
+    //print ("Checking {} {} {}".format(ship_size, direction, start_pos))
+    if (direction === "horizontal") {
+      // Check if it won't fit on the grid
+      // -1 as start_pos is included in the size
+      if ((start_pos[0] + ship_size - 1) > 9) {
+        return false;
+      }
+      // check that there are no ships in the way
+      // range goes to one less than max size - so no need for the -1
+      for (let x_pos = start_pos[0]; x_pos < (start_pos[0] + ship_size); x_pos++) {
+        if (this.owngrid[x_pos][start_pos[1]] === Player.HIT) {
+          return false;
+        }
+      }
+      return true;
+    }
+    // Otherwise vertical
+    else {
+      // Check if it won't fit on the grid
+      // -1 as start_pos is included in the size
+      if ((start_pos[1] + ship_size - 1) > 9) {
+        return false;
+      }
+      // check that there are no ships in the way
+      // range goes to one less than max size - so no need for the -1
+      for (let y_pos = start_pos[1]; y_pos < (start_pos[1] + ship_size); y_pos++) {
+        if (this.owngrid[start_pos[0]][y_pos] === Player.HIT) {
+          return false;
+        }
+      }
+      return true;
+    }
+  }
+
+  // Place ship is used during ship placement
+  // Updates grid with location of ship
+  place_ship(ship_size, direction, start_pos) {
+    if (direction === "horizontal") {
+      for (let x_pos = start_pos[0]; x_pos < (start_pos[0] + ship_size); x_pos++) {
+        this.owngrid[x_pos][start_pos[1]] = Player.HIT;
+      }
+    }
+    // otherwise vertical
+    else {
+      for (let y_pos = start_pos[1]; y_pos < (start_pos[1] + ship_size); y_pos++) {
+        this.owngrid[start_pos[0]][y_pos] = Player.HIT;
+      }
+    }
+  }
+
+  reset() {
+    this.owngrid = [];
+    for (let x = 0; x < 10; x++) {
+      this.owngrid.push((new Array(10)).fill(Player.NA));
+    }
+  }
+}
+
+// Provides Ai Player
+class PlayerAi extends Player {
+  constructor() {
+    super();
+
+    // Create 2 dimension list with no shots fired
+    // access using [x value][y value]
+    // Pre-populate with not checked
+    this.reset();
+    // Hit ship is the position of the first successful hit on a ship
+    this.hit_ship = null;
+  }
+
+  fire_shot() {
+    // If not targetting hit ship
+    if (this.hit_ship === null) {
+      return this.get_random();
+    }
+    else {
+      // Have scored a hit - so find neighbouring positions
+      // copy hit_ship into separate values to make easier to follow
+      let hit_x = this.hit_ship[0],
+          hit_y = this.hit_ship[1];
+      // Try horizontal if not at edge
+      if (hit_x < 9) {
+        for (let x = hit_x + 1; x < 10; x++) {
+          if (this.shots[x][hit_y] === Player.NA) {
+            return [x, hit_y];
+          }
+          if (this.shots[x][hit_y] === Player.MISS) {
+            break;
+          }
+        }
+      }
+      if (hit_x > 0) {
+        for (let x = hit_x - 1; x > -1; x--) {
+          if (this.shots[x][hit_y] === Player.NA) {
+            return [x, hit_y];
+          }
+          if (this.shots[x][hit_y] === Player.MISS) {
+            break;
+          }
+        }
+      }
+      if (hit_y < 9) {
+        for (let y = hit_y + 1; y < 10; y++) {
+          if (this.shots[hit_x][y] === Player.NA) {
+            return [hit_x, y];
+          }
+          if (this.shots[hit_x][y] === Player.MISS) {
+            break;
+          }
+        }
+      }
+      if (hit_y > 0) {
+        for (let y = hit_y - 1; y > -1; y--) {
+          if (this.shots[hit_x][y] === Player.NA) {
+            return [hit_x, y];
+          }
+          if (this.shots[hit_x][y] === Player.MISS) {
+            break;
+          }
+        }
+      }
+      // Catch all - shouldn't get this, but just in case guess random
+      return this.get_random();
+    }
+  }
+
+  fire_result(grid_pos, result) {
+    let x_pos = grid_pos[0],
+        y_pos = grid_pos[1],
+        result_value;
+    if (result) {
+      result_value = Player.HIT;
+      if (this.hit_ship == null) {
+        this.hit_ship = [x_pos, y_pos];
+      }
+    }
+    else {
+      result_value = Player.MISS;
+    }
+    this.shots[x_pos][y_pos] = result_value;
+  }
+
+  get_random() {
+    // Copy only non used positions into a temporary list
+    let non_shots = [];
+    for (let x_pos = 0; x_pos < 10; x_pos++) {
+      for (let y_pos = 0; y_pos < 10; y_pos++) {
+        if (this.shots[x_pos][y_pos] === Player.NA) {
+          non_shots.push([x_pos, y_pos]);
+        }
+      }
+    }
+    return non_shots[getRandomInteger(0, non_shots.length)];
+  }
+
+  // Let Ai know that the last shot sunk a ship
+  // list_pos is provided, but not currently used
+  ship_sunk(grid_pos) {
+    // reset hit ship
+    this.hit_ship = null;
+  }
+
+  // Find a position for the ship -
+  position_ship(ship_size) {
+    // determine if horizontal or vertical
+    let direction = ["horizontal", "vertical"][getRandomInteger(0, 2)],
+    // Position where the ship starts
+        grid_pos = [null, null],
+        possible_positions, x_pos, y_pos, position;
+    // Keep trying to find a place until successful
+    while (grid_pos[0] == null) {
+      possible_positions = [];
+      // if horizontal first choose y axis
+      if (direction === "horizontal") {
+        y_pos = getRandomInteger(0, 10);
+        // Find positions that the ship will fit
+        for (let x_pos = 0; x_pos < (9 - ship_size); x_pos++) {
+          if (this.check_ship_fit(ship_size, direction, [x_pos, y_pos])) {
+            possible_positions.push([x_pos, y_pos]);
+          }
+        }
+      }
+      else {
+        x_pos = getRandomInteger(0, 10);
+        // Find positions that the ship will fit
+        for (let y_pos = 0; y_pos < (9 - ship_size); y_pos++) {
+          if (this.check_ship_fit(ship_size, direction, [x_pos, y_pos])) {
+            possible_positions.push([x_pos, y_pos]);
+          }
+        }
+      }
+      // Did we find any possible positions?
+      if (possible_positions.length > 0) {
+        position = possible_positions[getRandomInteger(0, possible_positions.length)];
+        this.place_ship(ship_size, direction, position);
+        return [direction, position];
+      }
+      // if didn't get a match then try again
+      else {
+        continue;
+      }
+    }
+  }
+
+  reset() {
+    this.shots = [];
+    for (let x = 0; x < 10; x++) {
+      this.shots.push((new Array(10)).fill(Player.NA));
+    }
+    super.reset();
+  }
+}
+
+// Provides Ai Player
+class PlayerHuman extends Player {
+  constructor() {
+    super();
+  }
+}
+
+TITLE = "Battleships";
+
+// Set SIZE_SML to True for small size (800 x 480)
+const SIZE_SML = true;
+
+const GRID_SIZE = [38, 38];
+
+if (SIZE_SML) {
+  WIDTH = 800;
+  HEIGHT = 480;
+  GRID_SIZE[0] = 25;
+  GRID_SIZE[1] = 25;
+}
+else {
+  // Default screen size - can be changed by config
+  WIDTH = 1280;
+  HEIGHT = 720;
+}
+
+// suffix for image
+const IMG_TXT = SIZE_SML ? "_sml" : "";
+
+let player, grid_img_1, grid_img_2, own_fleet, enemy_fleet, player1, player2, mouse_position, key_position, your_fleet_txt_pos, enemy_fleet_txt_pos, ship_list, ship_list_text, player_ships, placing_ship, placing_ship_direction;
+
+function reset() {
+  player = "player1setup";
+  grid_img_1 = new Actor("grid" + IMG_TXT);
+  grid_img_2 = new Actor("grid" + IMG_TXT);
+  grid_img_1.topleft = [50, 150];
+  grid_img_2.topleft = [500, 150];
+
+  // Uses start of grid (after grid labels)
+  own_fleet = new Fleet([94, 179], GRID_SIZE);
+  enemy_fleet = new Fleet([544, 179], GRID_SIZE);
+
+  player1 = new PlayerHuman();
+  // Player 2 represents the AI player
+  player2 = new PlayerAi();
+
+  mouse_position = [0, 0];
+
+  key_position = [1000, 150];
+
+  your_fleet_txt_pos = [100, 100];
+  enemy_fleet_txt_pos = [550, 100];
+
+  // list of different ship types
+  ship_list = [
+    new Actor("carrier"),
+    new Actor("battleship"),
+    new Actor("submarine"),
+    new Actor("cruiser"),
+    new Actor("destroyer")
+  ];
+  ship_list[0].topleft = [key_position[0], key_position[1] + 70];
+  ship_list[1].topleft = [key_position[0], key_position[1] + 150];
+  ship_list[2].topleft = [key_position[0], key_position[1] + 230];
+  ship_list[3].topleft = [key_position[0], key_position[1] + 310];
+  ship_list[4].topleft = [key_position[0], key_position[1] + 390];
+
+  ship_list_text = [
+    ["Carrier (5)", [key_position[0], key_position[1] + 40]],
+    ["Battleship (4)", [key_position[0], key_position[1] + 120]],
+    ["Submarine (3)", [key_position[0], key_position[1] + 200]],
+    ["Cruiser (3)", [key_position[0], key_position[1] + 280]],
+    ["Destroyer (2)", [key_position[0], key_position[1] + 360]]
+  ];
+
+  // configure is used to read config
+  // after this will know screen size
+  configure();
+
+  // Add Ai ships - start with largest
+  // position ship takes ship size and returns direction, position
+  let hide_ship = true,
+      this_ship;
+  this_ship = player2.position_ship(5);
+  enemy_fleet.add_ship("carrier", this_ship[1], this_ship[0], IMG_TXT, GRID_SIZE, hide_ship);
+  this_ship = player2.position_ship(4);
+  enemy_fleet.add_ship("battleship", this_ship[1], this_ship[0], IMG_TXT, GRID_SIZE, hide_ship);
+  this_ship = player2.position_ship(3);
+  enemy_fleet.add_ship("submarine", this_ship[1], this_ship[0], IMG_TXT, GRID_SIZE, hide_ship);
+  this_ship = player2.position_ship(3);
+  enemy_fleet.add_ship("cruiser", this_ship[1], this_ship[0], IMG_TXT, GRID_SIZE, hide_ship);
+  this_ship = player2.position_ship(2);
+  enemy_fleet.add_ship("destroyer", this_ship[1], this_ship[0], IMG_TXT, GRID_SIZE, hide_ship);
+
+  player_ships = new Map([
+    ["carrier", 5],
+    ["battleship", 4],
+    ["cruiser", 3],
+    ["submarine", 3],
+    ["destroyer", 2]
+  ]);
+  placing_ship = "carrier";
+  placing_ship_direction = "horizontal";
+}
+
+function configure() {
+  if (!SIZE_SML) {
+    return;
+  }
+  grid_img_1.topleft = [60, 140];
+  grid_img_2.topleft = [420, 140];
+
+  your_fleet_txt_pos = [80, 90];
+  enemy_fleet_txt_pos = [440, 90];
+
+  own_fleet.change_grid([91, 163], GRID_SIZE, IMG_TXT);
+  enemy_fleet.change_grid([451, 163], GRID_SIZE, IMG_TXT);
+}
+
+function draw() {
+  screen.fill([192, 192, 192]);
+  grid_img_1.draw();
+  grid_img_2.draw();
+  screen.draw.text("Battleships", {
+    fontsize: 60,
+    center: [WIDTH / 2, 50],
+    shadow: [1, 1],
+    color: [255, 255, 255],
+    scolor: [32, 32, 32]
+  });
+  screen.draw.text("Your fleet", {
+    fontsize: 40,
+    topleft: your_fleet_txt_pos,
+    color: [255, 255, 255]
+  });
+  screen.draw.text("The enemy fleet", {
+    fontsize: 40,
+    topleft: enemy_fleet_txt_pos,
+    color: [255, 255, 255]
+  });
+  own_fleet.draw();
+  enemy_fleet.draw();
+  if (player === "gameover1") {
+    screen.draw.text("Game Over\nYou won", {
+      fontsize: 60,
+      center: [WIDTH / 2, HEIGHT / 2],
+      shadow: [1, 1],
+      color: [255, 255, 255],
+      scolor: [32, 32, 32]
+    });
+  }
+  else if (player === "gameover2") {
+    screen.draw.text("Game Over\nYou lost!", {
+      fontsize: 60,
+      center: [WIDTH / 2, HEIGHT / 2],
+      shadow: [1, 1],
+      color: [255, 255, 255],
+      scolor: [32, 32, 32]
+    });
+  }
+  else if (player === "player1setup") {
+    screen.draw.text("Place your ships", {
+      fontsize: 40,
+      center: [WIDTH / 2, 650],
+      color: [255, 255, 255]
+    });
+    if (own_fleet.grid.check_in_grid(mouse_position)) {
+      let preview_width, preview_height;
+      if (placing_ship_direction === "horizontal") {
+        preview_width = (GRID_SIZE[0] * player_ships.get(placing_ship)) - 4;
+        preview_height = GRID_SIZE[1] - 4;
+      }
+      else {
+        preview_width = GRID_SIZE[0] - 4;
+        preview_height = (GRID_SIZE[1] * player_ships.get(placing_ship)) - 4;
+      }
+      // Show approx position of ship (slightly offset to top left)
+      screen.draw.rect(new Rect([mouse_position[0] - 2, mouse_position[1] - 2], [preview_width, preview_height]), [128, 128, 128]);
+    }
+  }
+  else {
+    screen.draw.text("Aim and fire", {
+      fontsize: 40,
+      center: [WIDTH / 2, 650],
+      color: [255, 255, 255]
+    });
+  }
+  // Only show key if screen is wider than 1200
+  if (WIDTH >= 1200) {
+    for (let ship_key_img of ship_list) {
+      ship_key_img.draw();
+    }
+    screen.draw.text("Ships", {
+      topleft: key_position,
+      fontsize: 38
+    });
+    for (let ship_text of ship_list_text) {
+      screen.draw.text(ship_text[0], {
+        topleft: ship_text[1]
+      });
+    }
+  }
+}
+
+function update() {
+  if (player === "player1setup") {
+  }
+
+  if (player === "player2") {
+    let grid_pos = player2.fire_shot(),
+        // Ai uses list position - but grid uses grid
+        result = own_fleet.fire(grid_pos);
+    player2.fire_result(grid_pos, result);
+    // If ship sunk then inform Ai player
+    if (result) {
+      if (own_fleet.is_ship_sunk_grid_pos(grid_pos)) {
+        player2.ship_sunk(grid_pos);
+        // As a ship is sunk - check to see if all ships are sunk
+        if (own_fleet.all_sunk()) {
+          player = "gameover2";
+          return;
+        }
+      }
+    }
+
+    // If reach here then not gameover, so switch back to main player
+    player = "player1";
+  }
+}
+
+// Track position of mouse, needed during ship placement
+function on_mouse_move(pos) {
+  mouse_position = pos.slice();
+}
+
+function on_mouse_down(pos, button) {
+  if (player === "player1setup") {
+    if ((button & mouse.RIGHT) > 0) {
+      if (placing_ship_direction === "horizontal") {
+        placing_ship_direction = "vertical";
+      }
+      else {
+        placing_ship_direction = "horizontal";
+      }
+    }
+    else if ((button & mouse.LEFT) > 0) {
+      // Click to place_ship
+      // Check if no grid
+      if (own_fleet.grid.check_in_grid(mouse_position)) {
+        // convert to grid position
+        let grid_pos = own_fleet.grid.get_grid_pos(mouse_position);
+        // check it fits and reserve space
+        if (player1.check_ship_fit(player_ships.get(placing_ship), placing_ship_direction, grid_pos)) {
+          player1.place_ship(player_ships.get(placing_ship), placing_ship_direction, grid_pos);
+          // Create the ship object
+          own_fleet.add_ship(placing_ship, grid_pos, placing_ship_direction, IMG_TXT, GRID_SIZE);
+          // Remove from list of ships to add_ship
+          player_ships.delete(placing_ship);
+          // If more ships to place_ship
+          let keys = Array.from(player_ships.keys());
+          if (keys.length > 0) {
+            // Get next ship to add
+            placing_ship = keys.shift();
+            placing_ship_direction = "horizontal";
+          }
+          else {
+            // When completed adding ships switch to play
+            player = "player1";
+          }
+        }
+      }
+    }
+  }
+
+  if ((button & mouse.LEFT) <= 0) {
+    return;
+  }
+  if (player === "player1") {
+    if (enemy_fleet.grid.check_in_grid(pos)) {
+      let grid_location = enemy_fleet.grid.get_grid_pos(pos);
+      enemy_fleet.fire(grid_location);
+      if (enemy_fleet.all_sunk()) {
+        player = "gameover1";
+      }
+      else {
+        // switch to player 2
+        player = "player2";
+      }
+    }
+  }
+  else if ((player === "gameover1") || (player === "gameover2")) {
+    own_fleet.reset();
+    enemy_fleet.reset();
+    player1.reset();
+    player2.reset();
+    reset();
+    player = "player1setup";
+  }
+}
+
+window.addEventListener('load', (event) => {
+  screen.init();
+});
+</script>
+</body>
+
+</html>
